@@ -1,3 +1,6 @@
+import numpy as np
+import cv2
+
 from config import PreprocessingConfig
 
 class Preprocessor:
