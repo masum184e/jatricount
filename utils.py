@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import cv2
 
-def show_images(*images, figsize=(15, 5)):
+def show_images(*images, output_path="output/output.png", figsize=(15, 5)):
     
     n = len(images)
     fig, axes = plt.subplots(1, n, figsize=figsize)
@@ -15,4 +15,6 @@ def show_images(*images, figsize=(15, 5)):
         ax.axis("off")
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
