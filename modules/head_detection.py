@@ -15,12 +15,28 @@ class HeadDetector:
             except ImportError as e:
                 raise ImportError("Could not load YOLO (`pip install ultralytics`)") from e
             self._model = YOLO(cfg.yolo_weights)
-            
+        elif self.backend == "haar":
+            cascade_path = cv2.data.haarcascades + cfg.haar_cascade
+            self._model = cv2.CascadeClassifier(cascade_path)
+            if self._model.empty():
+                raise IOError(f"Could not load Haar cascade at {cascade_path}")            
         else:
             raise ValueError(f"Unknown head-detection backend: {self.backend}")
 
     def detect(self, frame: np.ndarray) -> List[Detection]:
+        if self.backend == "haar":
+            return self._detect_haar(frame)
         return self._detect_yolo(frame)
+
+    def _detect_haar(self, frame: np.ndarray) -> List[Detection]:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        boxes = self._model.detectMultiScale(
+            gray,
+            scaleFactor=self.cfg.scale_factor,
+            minNeighbors=self.cfg.min_neighbors,
+            minSize=self.cfg.min_size,
+        )
+        return [Detection(box=tuple(int(v) for v in b), confidence=1.0) for b in boxes]
 
     def _detect_yolo(self, frame: np.ndarray) -> List[Detection]:
         results = self._model.predict(

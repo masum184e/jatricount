@@ -25,7 +25,16 @@ class DensityDecisionConfig:
     overlap_ratio_threshold: float = 0.15
 
 @dataclass
+class DensityMapConfig:
+    gaussian_sigma: float = 8.0
+    downsample: int = 4        
+    model_weights: str = None
+    backend: str = "classical"      # "csrnet", "mdnn", "fcn"    
+    model_path = "mdnn/crowd_counting.pth"
+
+@dataclass
 class PipelineConfig:
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     head_detection: HeadDetectionConfig = field(default_factory=HeadDetectionConfig)
     density_decision: DensityDecisionConfig = field(default_factory=DensityDecisionConfig)
+    density_map: DensityMapConfig = field(default_factory=DensityMapConfig)
