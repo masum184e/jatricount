@@ -12,15 +12,18 @@ class Preprocessor:
         out = frame
 
         if self.cfg.do_denoise:
-            out = cv2.fastNlMeansDenoisingColored(out, None, 3, 3, 7, 21)
+            print("Denoising ...")
+            # out = cv2.fastNlMeansDenoisingColored(out, None, 3, 3, 7, 21)
 
         if self.cfg.do_clahe:
+            print("Clahe ...")
             lab = cv2.cvtColor(out, cv2.COLOR_BGR2LAB)
             l, a, b = cv2.split(lab)
             l = self._clahe.apply(l)
             out = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
 
         if self.cfg.blur_kernel:
+            print("Gaussian Bluring ...")
             out = cv2.GaussianBlur(out, self.cfg.blur_kernel, 0)
 
         return out

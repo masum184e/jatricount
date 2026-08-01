@@ -19,6 +19,13 @@ class HeadDetectionConfig:
     yolo_conf: float = 0.25
 
 @dataclass
+class DensityDecisionConfig:
+    heads_per_1000px2_threshold: float = 0.35
+    min_heads_for_dense_check: int = 15
+    overlap_ratio_threshold: float = 0.15
+
+@dataclass
 class PipelineConfig:
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     head_detection: HeadDetectionConfig = field(default_factory=HeadDetectionConfig)
+    density_decision: DensityDecisionConfig = field(default_factory=DensityDecisionConfig)
