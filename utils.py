@@ -74,23 +74,32 @@ def show_images(
     fig, axes = plt.subplots(
         1,
         n,
-        figsize=figsize
+        figsize=figsize,
+        gridspec_kw={"wspace": 0, "hspace": 0}
     )
 
     if n == 1:
         axes = [axes]
 
     for ax, (img, title) in zip(axes, images):
-        ax.imshow(
-            cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        )
+        ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         ax.set_title(title)
         ax.axis("off")
 
-    plt.tight_layout()
+    # Remove all margins around the figure
+    plt.subplots_adjust(
+        left=0,
+        right=1,
+        top=1,
+        bottom=0,
+        wspace=0,
+        hspace=0
+    )
+
     plt.savefig(
         output_path,
         dpi=300,
-        bbox_inches="tight"
+        bbox_inches="tight",
+        pad_inches=0
     )
     plt.close(fig)

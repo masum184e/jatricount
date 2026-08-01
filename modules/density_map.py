@@ -77,13 +77,39 @@ class DensityMapPredictor:
 
         return float(density.sum()), density
 
-    def visualize(self, frame: np.ndarray, density_map: np.ndarray, alpha: float = 0.5) -> np.ndarray:
-        """Overlay density map as a heatmap on top of the frame."""
+    def visualize(self, frame: np.ndarray, density_map: np.ndarray,
+                  alpha: float = 0.8, radius: int = 30) -> np.ndarray:
+
         h, w = frame.shape[:2]
-        dmap = cv2.resize(density_map.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
+
+        # Heatmap
+        dmap = cv2.resize(
+            density_map.astype(np.float32),
+            (w, h),
+            interpolation=cv2.INTER_LINEAR,
+        )
 
         dmax = dmap.max()
-        dmap_norm = (dmap / dmax * 255.0).astype(np.uint8) if dmax > 0 else dmap.astype(np.uint8)
+        if dmax > 0:
+            dmap_norm = (dmap / dmax * 255).astype(np.uint8)
+        else:
+            dmap_norm = np.zeros_like(dmap, dtype=np.uint8)
 
         heatmap = cv2.applyColorMap(dmap_norm, cv2.COLORMAP_JET)
-        return cv2.addWeighted(frame, 1 - alpha, heatmap, alpha, 0)
+        overlay = cv2.addWeighted(frame, 1 - alpha, heatmap, alpha, 0)
+
+        # -------------------------
+        # Find local peaks
+        # -------------------------
+        kernel = np.ones((31, 31), np.uint8)
+        local_max = cv2.dilate(dmap, kernel)
+
+        peaks = (dmap == local_max) & (dmap > 0.2 * dmax)
+
+        ys, xs = np.where(peaks)
+
+        # Draw large dots
+        for x, y in zip(xs, ys):
+            cv2.circle(overlay, (x, y), radius, (255, 255, 255), -1)
+
+        return overlay

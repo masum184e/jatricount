@@ -28,29 +28,31 @@ class CrowdCountingPipeline:
             (process_frame, "Process Frame"),
             output_path="output/process.png"
         )
-        print("===========Preprocess End===========")
+        sparse_input = process_frame.copy()
+        dense_input = process_frame.copy()
+        print("===========Preprocess End===========\n\n\n")
         print("Detecting Head ...")
 
-        detection_result = self.head_detector.detect(process_frame)
-        scene_type = self.density_decider.decide(detection_result, process_frame.shape)
+        detection_result = self.head_detector.detect(sparse_input)
+        scene_type = self.density_decider.decide(detection_result, sparse_input.shape)
         print(f"Scene Type: {scene_type}")
         sparse_count, kept_dets = self.bbox_counter.count(detection_result)
         print(f"Sparse Count: {sparse_count}")
         print(f"Kept Dets: {kept_dets}")
 
         for det in detection_result:
-            process_frame = det.plot(process_frame)
+            sparse_input = det.plot(sparse_input)
 
         show_images(
             (raw_frame, "Original"),
-            (process_frame, "Process Frame"),
+            (sparse_input, "Process Frame"),
             output_path="output/detection.png"
         )
-        print("===========Head Detected===========")
+        print("===========Head Detected===========\n\n\n")
 
         print("Detecting Dense ...")
-        dense_count, density_map = self.density_predictor.predict(process_frame, detection_result)
-        density_overlay = self.density_predictor.visualize(process_frame, density_map)
+        dense_count, density_map = self.density_predictor.predict(dense_input, detection_result)
+        density_overlay = self.density_predictor.visualize(dense_input, density_map)
         
         show_images(
             (raw_frame, "Original"),
@@ -58,4 +60,4 @@ class CrowdCountingPipeline:
             output_path="output/density.png"
         )
         print(f"Dense Count: {dense_count}")
-        print("===========Dense Counted===========")
+        print("===========Dense Counted===========\n\n\n")

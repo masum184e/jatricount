@@ -5,7 +5,7 @@ from pipeline import CrowdCountingPipeline
 def main():
     pipeline = CrowdCountingPipeline()
     
-    image_path = r"test_data\test_1.jpg"
+    image_path = r"test_data\test_9.jpg"
     frame = cv2.imread(image_path)
     pipeline.run_image(frame)
 
