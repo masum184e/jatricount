@@ -33,8 +33,17 @@ class DensityMapConfig:
     model_path = "mdnn/crowd_counting.pth"
 
 @dataclass
+class FusionConfig:
+    sparse_weight: float = 1.0
+    dense_weight: float = 1.0
+    # blend zone: when the two branches disagree by more than this
+    # fraction, trust the branch chosen by the density decision module
+    disagreement_fallback: float = 0.5
+
+@dataclass
 class PipelineConfig:
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     head_detection: HeadDetectionConfig = field(default_factory=HeadDetectionConfig)
     density_decision: DensityDecisionConfig = field(default_factory=DensityDecisionConfig)
     density_map: DensityMapConfig = field(default_factory=DensityMapConfig)
+    fusion: FusionConfig = field(default_factory=FusionConfig)

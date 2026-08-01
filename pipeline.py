@@ -9,6 +9,7 @@ from modules.head_detection import HeadDetector
 from modules.density_decision import DensityDecisionModule
 from modules.sparse_counter import BoundingBoxCounter
 from modules.density_map import DensityMapPredictor
+from modules.fusion import FusionModule
 
 class CrowdCountingPipeline:
     def __init__(self, cfg: PipelineConfig = None):
@@ -19,6 +20,7 @@ class CrowdCountingPipeline:
         self.density_decider = DensityDecisionModule(self.cfg.density_decision)
         self.bbox_counter = BoundingBoxCounter()
         self.density_predictor = DensityMapPredictor(self.cfg.density_map)
+        self.fusion = FusionModule(self.cfg.fusion)
 
     def run_image(self, raw_frame):
         print("Processing Image ...")
@@ -61,3 +63,6 @@ class CrowdCountingPipeline:
         )
         print(f"Dense Count: {dense_count}")
         print("===========Dense Counted===========\n\n\n")
+
+        fused_count = self.fusion.fuse(scene_type, sparse_count, dense_count)
+        print(f"Fusion Count: {fused_count}")
