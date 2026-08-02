@@ -1,5 +1,6 @@
 from config import DensityDecisionConfig
 from typing import List
+import itertools
 
 from utils import Detection, iou
 
@@ -22,7 +23,7 @@ class DensityDecisionModule:
             return "dense"
         return "sparse"
 
-    def _mean_overlap_ratio(detections: List[Detection]) -> float:
+    def _mean_overlap_ratio(self, detections: List[Detection]) -> float:
         if len(detections) < 2:
             return 0.0
         pairs = list(itertools.combinations(detections, 2))

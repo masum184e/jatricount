@@ -10,7 +10,8 @@ class PreprocessingConfig:
 
 @dataclass
 class HeadDetectionConfig:
-    backend: str = "yolo"            # "haar" | "yolo"
+    backend: str = "haar"            # "haar" | "yolo"
+    # haar required the following package: pip install opencv-python==4.10.0.84
     haar_cascade: str = "haarcascade_frontalface_default.xml"
     scale_factor: float = 1.08
     min_neighbors: int = 4
@@ -29,7 +30,7 @@ class DensityMapConfig:
     gaussian_sigma: float = 8.0
     downsample: int = 4        
     model_weights: str = None
-    backend: str = "classical"      # "csrnet", "mdnn", "fcn"    
+    backend: str = "mdnn"      # "csrnet", "mdnn", "fcn"    
     model_path = "mdnn/crowd_counting.pth"
 
 @dataclass

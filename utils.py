@@ -8,7 +8,7 @@ from typing import Tuple, List
 
 @dataclass
 class Detection:
-    
+
     box: Tuple[int, int, int, int]   # (x, y, w, h)
     confidence: float = 1.0
 
@@ -47,6 +47,7 @@ class Detection:
 
         return image
 
+
 def iou(box_a: Tuple[int, int, int, int], box_b: Tuple[int, int, int, int]) -> float:
     """Intersection-over-union for two (x, y, w, h) boxes."""
     ax1, ay1, aw, ah = box_a
@@ -63,11 +64,45 @@ def iou(box_a: Tuple[int, int, int, int], box_b: Tuple[int, int, int, int]) -> f
     union = aw * ah + bw * bh - inter
     return inter / union if union > 0 else 0.0
 
+
+def _resize_for_display(img: np.ndarray, max_side: int = 1600) -> np.ndarray:
+    """Downscale an image so its longest side is at most max_side.
+
+    Large frames (e.g. multi-thousand-pixel camera captures) blow up
+    matplotlib's internal rasterization step -- it converts the array
+    to float64 during rendering, and at high resolution + high dpi
+    that can require gigabytes of RAM (this is what caused the
+    numpy._core._exceptions._ArrayMemoryError on a 7846x5884 frame).
+    Downscaling before imshow avoids this entirely and is more than
+    enough resolution for a saved comparison figure.
+    """
+    h, w = img.shape[:2]
+    long_side = max(h, w)
+
+    if long_side <= max_side:
+        return img
+
+    scale = max_side / float(long_side)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+
+    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+
 def show_images(
     *images: Tuple[np.ndarray, str],
     output_path: str = "output/output.png",
-    figsize: Tuple[int, int] = (15, 5)
+    figsize: Tuple[int, int] = (15, 5),
+    dpi: int = 150,
+    max_side: int = 1600,
 ) -> None:
+    """Save a side-by-side comparison of images.
+
+    dpi was lowered from 300 -> 150 and each image is downscaled to
+    at most `max_side` pixels on its longest side before being handed
+    to matplotlib, to avoid huge memory allocations when the source
+    frames are very large (e.g. high-res camera captures).
+    """
 
     n = len(images)
 
@@ -82,7 +117,8 @@ def show_images(
         axes = [axes]
 
     for ax, (img, title) in zip(axes, images):
-        ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        display_img = _resize_for_display(img, max_side=max_side)
+        ax.imshow(cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB))
         ax.set_title(title)
         ax.axis("off")
 
@@ -98,7 +134,7 @@ def show_images(
 
     plt.savefig(
         output_path,
-        dpi=300,
+        dpi=dpi,
         bbox_inches="tight",
         pad_inches=0
     )

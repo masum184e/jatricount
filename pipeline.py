@@ -66,3 +66,15 @@ class CrowdCountingPipeline:
 
         fused_count = self.fusion.fuse(scene_type, sparse_count, dense_count)
         print(f"Fusion Count: {fused_count}")
+
+        print("\n\n\n=== Crowd Counting Summary ===\n")
+
+        print({
+            "frames_processed": 1,
+            "instantaneous_sparse_count": sparse_count,
+            "instantaneous_dense_count": round(dense_count, 2),
+            "final_fused_count": round(fused_count, 2),
+            "scene_type": scene_type,
+            "detected_heads": len(detection_result),
+            "kept_detections": len(kept_dets),
+        })
