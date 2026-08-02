@@ -3,6 +3,7 @@ import cv2
 from utils import show_images
 
 from config import PreprocessingConfig, PipelineConfig
+from logger import get_logger, StepTimer
 
 from modules.preprocessing import Preprocessor
 from modules.head_detection import HeadDetector
@@ -10,6 +11,8 @@ from modules.density_decision import DensityDecisionModule
 from modules.sparse_counter import BoundingBoxCounter
 from modules.density_map import DensityMapPredictor
 from modules.fusion import FusionModule
+
+log = get_logger(__name__)
 
 class CrowdCountingPipeline:
     def __init__(self, cfg: PipelineConfig = None):
@@ -22,8 +25,11 @@ class CrowdCountingPipeline:
         self.density_predictor = DensityMapPredictor(self.cfg.density_map)
         self.fusion = FusionModule(self.cfg.fusion)
 
+        log.info("CrowdCountingPipeline initialized")
+ 
     def run_image(self, raw_frame):
-        print("Processing Image ...")
+        log.info("=" * 60)
+        log.info("Processing image | shape=%s", raw_frame.shape)
         process_frame = self.preprocessor.process(raw_frame)
         show_images(
             (raw_frame, "Original"),
