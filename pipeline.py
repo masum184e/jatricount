@@ -58,6 +58,27 @@ class CrowdCountingPipeline:
         with StepTimer(log, f"{tag} | Head Detection"):
             detection_result = self.head_detector.detect(sparse_input)
 
+            for det in detection_result:
+                x, y, w, h = det.box
+
+                cv2.rectangle(
+                    sparse_input,
+                    (x, y),
+                    (x + w, y + h),
+                    (0, 255, 0),   # Green
+                    4              # Thickness
+                )
+
+                cv2.putText(
+                    sparse_input,                  
+                    f"{det.confidence:.2f}",       
+                    (x, y - 8),                    # Bottom-left corner of the text (slightly above the box)
+                    cv2.FONT_HERSHEY_SIMPLEX,      # Font type
+                    4,                             # Font scale (text size)
+                    (0, 255, 0),                   # Green
+                    10,                            # Thickness
+                )
+
         scene_type = self.density_decider.decide(detection_result, sparse_input.shape)
         level(f"Scene Type: {scene_type}")
 
@@ -153,10 +174,8 @@ class CrowdCountingPipeline:
 
         log.info("=" * 75)
         log.info("Crowd Counting Video Summary")
-        log.info({
-            "frames_processed": len(results),
-            "avg_fused_count": round(avg_fused, 2),
-            "max_fused_count": round(max_fused, 2),
-        })
+        log.info(f"Frames Processed : {len(results)}")
+        log.info(f"Average Count    : {avg_fused:.2f}")
+        log.info(f"Maximum Count    : {max_fused:.2f}")
 
         return results
