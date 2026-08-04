@@ -2,6 +2,10 @@ import numpy as np
 import cv2
 
 from config import PreprocessingConfig
+from logger import get_logger
+
+log = get_logger(__name__)
+
 
 class Preprocessor:
     def __init__(self, cfg: PreprocessingConfig):
@@ -12,18 +16,18 @@ class Preprocessor:
         out = frame
 
         if self.cfg.do_denoise:
-            print("Denoising ...")
+            log.debug("Denoising ...")
             # out = cv2.fastNlMeansDenoisingColored(out, None, 3, 3, 7, 21)
 
         if self.cfg.do_clahe:
-            print("Clahe ...")
+            log.debug("Clahe ...")
             lab = cv2.cvtColor(out, cv2.COLOR_BGR2LAB)
             l, a, b = cv2.split(lab)
             l = self._clahe.apply(l)
             out = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
 
         if self.cfg.blur_kernel:
-            print("Gaussian Bluring ...")
+            log.debug("Gaussian Bluring ...")
             out = cv2.GaussianBlur(out, self.cfg.blur_kernel, 0)
 
         return out

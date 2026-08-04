@@ -4,17 +4,15 @@ main.py
 import os
 import cv2
 from pipeline import CrowdCountingPipeline
-from logger import get_logger
+from logger import get_logger, prompt_input
 
 log = get_logger(__name__)
 
-
-def print_intro():
-    log.info("=" * 50)
-    log.info("       Crowd Counting Pipeline")
-    log.info("=" * 50)
-    log.info("This tool estimates crowd counts from an image or a video "
-              "using a hybrid sparse/dense approach.")
+def show_intro():
+    log.info("=" * 75)
+    log.info("              Crowd Counting Pipeline")
+    log.info("=" * 75)
+    log.info("This tool estimates crowd counts from an image or a video using a hybrid sparse/dense approach.")
 
 
 def get_mode() -> str:
@@ -22,7 +20,7 @@ def get_mode() -> str:
         log.info("Select input type:")
         log.info("  1. Image")
         log.info("  2. Video")
-        choice = input("Enter choice (1/2): ").strip()
+        choice = prompt_input(log, "Enter choice (1/2):").strip()
         if choice == "1":
             return "image"
         if choice == "2":
@@ -32,18 +30,18 @@ def get_mode() -> str:
 
 def get_path(mode: str) -> str:
     while True:
-        path = input(f"Enter path to {mode} file: ").strip().strip('"')
+        path = prompt_input(log, f"Enter path to {mode} file:").strip().strip('"')
         if os.path.isfile(path):
             return path
         log.warning(f"File not found: {path}")
 
 
 def main():
-    print_intro()
+    show_intro()
     log.info("Session started")
-    pipeline = CrowdCountingPipeline()
     mode = get_mode()
     path = get_path(mode)
+    pipeline = CrowdCountingPipeline()
 
     if mode == "image":
         frame = cv2.imread(path)

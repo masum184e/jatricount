@@ -98,5 +98,3 @@ class FourColumnMDNN(nn.Module):
 
 # dummy_input = tf.random.normal((1, 256, 256, 3))
 # output = model(dummy_input)
-
-# print("Output shape:", output.shape)

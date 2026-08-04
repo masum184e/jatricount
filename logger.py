@@ -95,3 +95,23 @@ class StepTimer:
             )
         # returning False re-raises the exception, which we want
         return False
+
+def prompt_input(logger: logging.Logger, message: str) -> str:
+    """
+    Show `message` styled like a normal log line, wait for user input
+    on the SAME line, and still record the prompt in the log file.
+    """
+    formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
+    record = logger.makeRecord(logger.name, logging.INFO, "", 0, message, None, None)
+    formatted = formatter.format(record)
+
+    # Write the formatted line to the file handler(s) only (with newline),
+    # so it's captured in the log exactly like log.info() would write it.
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.FileHandler):
+            handler.stream.write(formatted + "\n")
+            handler.flush()
+
+    # Console: use the same formatted text as the input() prompt itself,
+    # so the cursor waits right after it on the same line.
+    return input(formatted + " ")

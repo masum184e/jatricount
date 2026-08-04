@@ -75,7 +75,15 @@ class CrowdCountingPipeline:
             )
 
         with StepTimer(log, f"{tag} | Density Prediction"):
-            dense_count, density_map = self.density_predictor.predict(dense_input, detection_result)
+            result = self.density_predictor.predict(dense_input, detection_result)
+            log.debug(f"predict() returned: {result!r}")
+            if result is None:
+                log.error(
+                    f"predict() returned None for backend={self.density_predictor.backend!r} "
+                    f"-- check _predict_{self.density_predictor.backend} for a missing return"
+                )
+                raise RuntimeError("DensityMapPredictor.predict() returned None")
+            dense_count, density_map = result
 
         if save_visuals:
             density_overlay = self.density_predictor.visualize(dense_input, density_map)

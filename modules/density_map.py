@@ -9,6 +9,9 @@ import torchvision.transforms as transforms
 
 from config import DensityMapConfig
 from utils import Detection
+from logger import get_logger, StepTimer
+
+log = get_logger(__name__)
 
 
 # ==========================================================
@@ -34,12 +37,6 @@ class DensityMapPredictor:
         self.cfg = cfg
         self.backend = cfg.backend
 
-        # Optional: resize the long side of the frame to this many
-        # pixels before running it through the mdnn model. Large
-        # multi-column CNNs (FourColumnMDNN uses parallel branches
-        # with big kernels) can take a very long time on CPU if fed
-        # full-resolution frames, and that can look identical to a
-        # hang. Set to None to disable resizing.
         self.mdnn_max_side: Optional[int] = getattr(
             cfg, "mdnn_max_side", 768
         )
@@ -54,6 +51,7 @@ class DensityMapPredictor:
                 from mdnn.fourcolumn import FourColumnMDNN
 
             except ImportError as e:
+                log.error("Could not import FourColumnMDNN", exc_info=True)
                 raise ImportError(
                     "Could not import FourColumnMDNN"
                 ) from e
@@ -64,18 +62,18 @@ class DensityMapPredictor:
                 if torch.cuda.is_available()
                 else torch.device("cpu")
             )
-            print(f"[DensityMapPredictor] Using device: {self.device}")
+            log.info(f"Using device: {self.device}")
 
             # Create model
             self._model = FourColumnMDNN()
 
             # Load weights
+            log.info(f"Loading checkpoint from {self.cfg.model_path}")
             checkpoint = torch.load(
                 self.cfg.model_path,
                 map_location=self.device
             )
 
-            # Handle checkpoints saved with extra keys
             if isinstance(checkpoint, dict):
 
                 if "state_dict" in checkpoint:
@@ -94,28 +92,22 @@ class DensityMapPredictor:
 
             self._model.eval()
 
-            # Image preprocessing
             self._transform = transforms.Compose(
                 [
                     transforms.ToTensor()
                 ]
             )
 
-            # Warm up the model once so the first real call isn't
-            # slowed down by lazy CUDA context init / kernel JIT
-            # compilation (only matters on GPU, harmless on CPU).
             self._warmup()
-
-        # ==================================================
-        # Classical backend
-        # ==================================================
 
         elif self.backend == "classical":
 
             self._model = None
+            log.info("Using classical density-map backend")
 
         else:
 
+            log.error(f"Unknown density-map backend: {self.backend}")
             raise ValueError(
                 f"Unknown density-map backend: {self.backend}"
             )
@@ -125,22 +117,19 @@ class DensityMapPredictor:
     # ======================================================
 
     def _warmup(self):
-        print("[DensityMapPredictor] Warming up mdnn model...")
-        t0 = time.time()
-
         dummy = np.zeros((256, 256, 3), dtype=np.uint8)
         try:
-            with torch.no_grad():
-                image = Image.fromarray(dummy)
-                tensor = self._transform(image).unsqueeze(0).to(self.device)
-                self._model(tensor)
-        except Exception as e:
+            with StepTimer(log, "mdnn warmup"):
+                with torch.no_grad():
+                    image = Image.fromarray(dummy)
+                    tensor = self._transform(image).unsqueeze(0).to(self.device)
+                    self._model(tensor)
+        except Exception:
             # Don't crash startup on a warmup failure; the real
             # call will surface a proper error if something is
-            # actually wrong.
-            print(f"[DensityMapPredictor] Warmup failed (non-fatal): {e}")
-
-        print(f"[DensityMapPredictor] Warmup done in {time.time() - t0:.2f}s")
+            # actually wrong. StepTimer already logs the failure
+            # with exc_info, so just note it's non-fatal here.
+            log.warning("Warmup failed, continuing anyway (non-fatal)")
 
     # ======================================================
     # Main prediction interface
@@ -168,10 +157,6 @@ class DensityMapPredictor:
     # ======================================================
 
     def _resize_for_mdnn(self, frame: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Resize frame so its long side is at most self.mdnn_max_side.
-        Returns the resized frame and the scale factor applied
-        (resized / original), so callers can rescale outputs if needed.
-        """
         if not self.mdnn_max_side:
             return frame, 1.0
 
@@ -195,19 +180,17 @@ class DensityMapPredictor:
         frame: np.ndarray
     ) -> Tuple[float, np.ndarray]:
 
-        print(f"[mdnn] input frame shape={frame.shape}")
+        # Runs once per frame -- debug level so it doesn't flood
+        # the console on video runs, but still lands in the log file.
+        log.debug(f"[mdnn] input frame shape={frame.shape}")
 
-        # Downscale large frames before inference -- big multi-column
-        # CNNs can be extremely slow on full-res CPU input, which
-        # looks like a hang if left unaddressed.
         infer_frame, scale = self._resize_for_mdnn(frame)
         if scale != 1.0:
-            print(
+            log.debug(
                 f"[mdnn] resized to {infer_frame.shape} "
                 f"(scale={scale:.3f}) for inference"
             )
 
-        # OpenCV BGR -> RGB
         image = cv2.cvtColor(
             infer_frame,
             cv2.COLOR_BGR2RGB
@@ -217,14 +200,10 @@ class DensityMapPredictor:
             image
         )
 
-        # Tensor shape:
-        # [C,H,W]
         input_tensor = self._transform(
             image
         )
 
-        # Add batch dimension:
-        # [1,C,H,W]
         input_tensor = input_tensor.unsqueeze(
             0
         )
@@ -233,21 +212,17 @@ class DensityMapPredictor:
             self.device
         )
 
-        print(
+        log.debug(
             f"[mdnn] input tensor shape={tuple(input_tensor.shape)}, "
             f"starting forward pass..."
         )
-        t0 = time.time()
 
-        with torch.no_grad():
+        with StepTimer(log, "mdnn forward pass"):
+            with torch.no_grad():
+                output = self._model(
+                    input_tensor
+                )
 
-            output = self._model(
-                input_tensor
-            )
-
-        print(f"[mdnn] forward pass done in {time.time() - t0:.2f}s")
-
-        # Remove batch/channel dimensions
         density_map = (
             output
             .squeeze()
@@ -265,119 +240,57 @@ class DensityMapPredictor:
         )
 
     # ======================================================
-    # Classical density map
+    # Classical density map 
     # ======================================================
 
     def _predict_classical(
-        self,
-        frame: np.ndarray,
-        detections: List[Detection]
-    ) -> Tuple[float, np.ndarray]:
-
-        h, w = frame.shape[:2]
-
-        ds = self.cfg.downsample
-
-        dh = max(
-            1,
-            h // ds
-        )
-
-        dw = max(
-            1,
-            w // ds
-        )
-
-        density = np.zeros(
-            (dh, dw),
-            dtype=np.float32
-        )
-
-        # Add detection points
-
-        for det in detections:
-
-            cx, cy = det.centroid
-
-            dx = int(
-                cx / ds
+            self,
+            frame: np.ndarray,
+            detections: List[Detection]
+        ) -> Tuple[float, np.ndarray]:
+    
+            h, w = frame.shape[:2]
+            ds = self.cfg.downsample
+            dh = max(1, h // ds)
+            dw = max(1, w // ds)
+    
+            density = np.zeros((dh, dw), dtype=np.float32)
+    
+            for det in detections:
+                cx, cy = det.centroid
+                dx = int(cx / ds)
+                dy = int(cy / ds)
+                if 0 <= dx < dw and 0 <= dy < dh:
+                    density[dy, dx] += 1.0
+    
+            sigma = max(1.0, self.cfg.gaussian_sigma / ds)
+            density = cv2.GaussianBlur(density, (0, 0), sigma)
+    
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 60, 150)
+    
+            edge_density = cv2.resize(
+                edges, (dw, dh), interpolation=cv2.INTER_AREA
+            ).astype(np.float32) / 255.0
+    
+            edge_density = cv2.GaussianBlur(edge_density, (0, 0), sigma)
+    
+            detection_mass = density.sum()
+    
+            if detection_mass > 0 and edge_density.sum() > 0:
+                correction_budget = 0.15 * detection_mass
+                edge_density *= (correction_budget / edge_density.sum())
+                density += edge_density
+    
+            log.debug(
+                f"[classical] detections={len(detections)} "
+                f"detection_mass={detection_mass:.2f} final_sum={density.sum():.2f}"
             )
-
-            dy = int(
-                cy / ds
-            )
-
-            if (
-                0 <= dx < dw and
-                0 <= dy < dh
-            ):
-
-                density[dy, dx] += 1.0
-
-        sigma = max(
-            1.0,
-            self.cfg.gaussian_sigma / ds
-        )
-
-        density = cv2.GaussianBlur(
-            density,
-            (0, 0),
-            sigma
-        )
-
-        # Edge correction
-
-        gray = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2GRAY
-        )
-
-        edges = cv2.Canny(
-            gray,
-            60,
-            150
-        )
-
-        edge_density = cv2.resize(
-            edges,
-            (dw, dh),
-            interpolation=cv2.INTER_AREA
-        ).astype(
-            np.float32
-        ) / 255.0
-
-        edge_density = cv2.GaussianBlur(
-            edge_density,
-            (0, 0),
-            sigma
-        )
-
-        detection_mass = density.sum()
-
-        if (
-            detection_mass > 0
-            and edge_density.sum() > 0
-        ):
-
-            correction_budget = (
-                0.15 *
-                detection_mass
-            )
-
-            edge_density *= (
-                correction_budget /
-                edge_density.sum()
-            )
-
-            density += edge_density
-
-        return (
-            float(density.sum()),
-            density
-        )
+    
+            return (float(density.sum()), density)
 
     # ======================================================
-    # Visualization
+    # Visualization 
     # ======================================================
 
     def visualize(
