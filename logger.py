@@ -21,7 +21,7 @@ from pathlib import Path
 # ---------------------------------------------------------
 LOG_DIR = Path("output/logs")
 LOG_LEVEL = logging.DEBUG          # what gets captured overall
-CONSOLE_LEVEL = logging.INFO       # what prints to terminal
+CONSOLE_LEVEL = logging.DEBUG       # what prints to terminal
 FILE_LEVEL = logging.DEBUG         # what gets written to file
 LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)-25s | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -41,6 +41,11 @@ def _configure_root():
 
     root = logging.getLogger()
     root.setLevel(LOG_LEVEL)
+
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("tensorflow").setLevel(logging.WARNING)
 
     formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
 

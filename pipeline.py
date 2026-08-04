@@ -107,7 +107,15 @@ class CrowdCountingPipeline:
             "kept_detections": len(kept_dets),
         }
 
-        level(f"Frame Summary: {summary}")
+        level("=" * 75)
+        level("Frame Summary:")
+        level(f"Input Type        : {summary['tag']}")
+        level(f"Scene Type        : {summary['scene_type'].title()}")
+        level(f"Detected Heads    : {summary['detected_heads']}")
+        level(f"Valid Detections  : {summary['kept_detections']}")
+        level(f"Sparse Count      : {summary['sparse_count']:.2f}")
+        level(f"Dense Count       : {summary['dense_count']:.2f}")
+        level(f"Final Crowd Count : {summary['fused_count']:.2f}")
 
         return summary
 
@@ -143,7 +151,8 @@ class CrowdCountingPipeline:
         avg_fused = sum(r["fused_count"] for r in results) / len(results)
         max_fused = max(r["fused_count"] for r in results)
 
-        log.info("=== Crowd Counting Video Summary ===")
+        log.info("=" * 75)
+        log.info("Crowd Counting Video Summary")
         log.info({
             "frames_processed": len(results),
             "avg_fused_count": round(avg_fused, 2),
