@@ -48,6 +48,12 @@ class FrameExtractionConfig:
     max_frames: int = None           # None = process whole video
     
 @dataclass
+class TrackingConfig:
+    iou_match_threshold: float = 0.3
+    max_missed_frames: int = 8       # frames a track can go undetected before deletion
+    min_hits_to_confirm: int = 2     # detections needed before a track counts as confirmed
+
+@dataclass
 class PipelineConfig:
     frame_extraction: FrameExtractionConfig = field(default_factory=FrameExtractionConfig)
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
@@ -55,3 +61,4 @@ class PipelineConfig:
     density_decision: DensityDecisionConfig = field(default_factory=DensityDecisionConfig)
     density_map: DensityMapConfig = field(default_factory=DensityMapConfig)
     fusion: FusionConfig = field(default_factory=FusionConfig)
+    tracking: TrackingConfig = field(default_factory=TrackingConfig)

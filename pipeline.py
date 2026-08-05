@@ -12,6 +12,7 @@ from modules.sparse_counter import BoundingBoxCounter
 from modules.density_map import DensityMapPredictor
 from modules.fusion import FusionModule
 from modules.frame_extraction import FrameExtractor
+# from modules.tracking import MultiObjectTracker
 from logger import get_logger, StepTimer
 
 log = get_logger(__name__)
@@ -26,6 +27,9 @@ class CrowdCountingPipeline:
         self.bbox_counter = BoundingBoxCounter()
         self.density_predictor = DensityMapPredictor(self.cfg.density_map)
         self.fusion = FusionModule(self.cfg.fusion)
+        # NOTE: no tracker instance here -- tracking is video-scoped (tracks
+        # must reset for each new video), so it's created fresh inside
+        # run_video() rather than shared pipeline state.
 
     def run_image(self, raw_frame, tag: str = "frame", save_visuals: bool = True, verbose: bool = True):
         """
@@ -36,18 +40,19 @@ class CrowdCountingPipeline:
         save_visuals: if True, writes {tag}_process.png / _detection.png /
                        _density.png to disk (single-image mode). Set False
                        for video mode -- no per-frame PNGs are written, but
-                       the annotated frames are still built and returned
-                       (see below) so run_video() can write them into video
-                       files instead.
+                       the annotated frames / detections are still built and
+                       returned (see below) so run_video() can use them.
         verbose: set False to demote per-frame detail from INFO to DEBUG
                  (keeps it out of the console but still in the log file).
 
-        Returns a summary dict. Also includes two internal keys, popped by
+        Returns a summary dict. Also includes internal keys, popped by
         run_video() before results are stored/logged:
-          - "_sparse_frame": the detection-boxes frame (green boxes + conf).
-          - "_dense_frame" : the density-map overlay frame.
-        These are always built (regardless of save_visuals) so video mode
-        never needs to touch disk per frame.
+          - "_sparse_frame" : the detection-boxes frame (green boxes + conf).
+          - "_dense_frame"  : the density-map overlay frame.
+          - "_detections"   : the raw detection_result list, needed by
+                               run_video() to feed the MultiObjectTracker
+                               (tracking needs box coordinates across
+                               frames, not just the rendered image).
         """
         level = log.info if verbose else log.debug
 
@@ -145,6 +150,7 @@ class CrowdCountingPipeline:
             # returned/logged.
             "_sparse_frame": sparse_input,
             "_dense_frame": density_overlay,
+            "_detections": detection_result,
         }
 
         level("=" * 75)
@@ -171,13 +177,21 @@ class CrowdCountingPipeline:
         Runs the pipeline over sampled frames of a video, using FrameExtractor
         (box 2) to handle decoding/sampling/resizing.
 
-        No per-frame PNGs are written in video mode. Instead, if
-        write_video=True, two annotated videos are produced:
-          - sparse_video_path: detection boxes + running count overlay.
-          - dense_video_path : density-map overlay + running count overlay.
+        No per-frame PNGs are written in video mode. If write_video=True,
+        two annotated videos are produced:
+          - sparse_video_path: detection boxes + track IDs + running count.
+          - dense_video_path : density-map overlay + running count.
+
+        Also runs MultiObjectTracker (box 8) across the whole video to
+        produce a single "unique individuals seen" number, independent of
+        the per-frame fused counts.
         """
         os.makedirs("output", exist_ok=True)
         results = []
+
+        # Fresh tracker per video -- tracks must not leak across separate
+        # run_video() calls / separate source videos.
+        # tracker = MultiObjectTracker(self.cfg.tracking)
 
         sparse_writer = None
         dense_writer = None
@@ -216,9 +230,33 @@ class CrowdCountingPipeline:
 
                 sparse_frame = summary.pop("_sparse_frame", None)
                 dense_frame = summary.pop("_dense_frame", None)
+                detections = summary.pop("_detections", [])
+
+                # --- Multi-object tracking -------------------------------
+                # track_ids is parallel to `detections` (same order), since
+                # MultiObjectTracker.update() preserves input order.
+                # track_ids = tracker.update(detections)
+                # summary["unique_count_so_far"] = tracker.total_unique_confirmed
+
+                # if sparse_frame is not None:
+                #     for det, tid in zip(detections, track_ids):
+                #         x, y, _, _ = det.box
+                #         cv2.putText(
+                #             sparse_frame,
+                #             f"ID {tid}",
+                #             (x, max(y - 40, 20)),   # above the confidence label
+                #             cv2.FONT_HERSHEY_SIMPLEX,
+                #             1.2,
+                #             (0, 255, 255),          # Yellow, distinct from box/conf color
+                #             3,
+                #         )
+                # -----------------------------------------------------------
 
                 if write_video:
-                    label = f"Count: {summary['fused_count']:.1f} | {summary['scene_type']}"
+                    label = (
+                        f"Count: {summary['fused_count']:.1f} | {summary['scene_type']} "
+                        # f"| Unique: {summary['unique_count_so_far']}"
+                    )
 
                     if sparse_frame is not None:
                         cv2.putText(
@@ -248,7 +286,8 @@ class CrowdCountingPipeline:
                 results.append(summary)
                 log.info(
                     f"[t={timestamp:6.2f}s] frame {frame_idx:6d} -> "
-                    f"fused_count={summary['fused_count']}"
+                    f"fused_count={summary['fused_count']} "
+                    # f"unique_so_far={summary['unique_count_so_far']}"
                 )
 
         if sparse_writer is not None:
@@ -267,8 +306,9 @@ class CrowdCountingPipeline:
 
         log.info("=" * 75)
         log.info("Crowd Counting Video Summary")
-        log.info(f"Frames Processed : {len(results)}")
-        log.info(f"Average Count    : {avg_fused:.2f}")
-        log.info(f"Maximum Count    : {max_fused:.2f}")
+        log.info(f"Frames Processed        : {len(results)}")
+        log.info(f"Average Fused Count     : {avg_fused:.2f}")
+        log.info(f"Maximum Fused Count     : {max_fused:.2f}")
+        # log.info(f"Unique Individuals Seen : {tracker.total_unique_confirmed}")
 
         return results
